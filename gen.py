@@ -9,19 +9,7 @@ import sys
 from numpy import pi, sqrt
 import argparse
 
-EXPLICIT_SOLVENT = False
-SALT = False
-WLC = False
-INTERACT = False
 
-if "-wlc" in sys.argv:
-    WLC = True
-if "-salt" in sys.argv:
-    SALT = True
-if "-water" in sys.argv:
-    EXPLICIT_SOLVENT = True
-if "-interact" in sys.argv:
-    INTERACT = True
 
 parser = argparse.ArgumentParser()
 
@@ -30,13 +18,18 @@ parser.add_argument('--small', default = False, type = bool)
 parser.add_argument('--salt', default = 0.0, type = float)
 parser.add_argument('--water',default = True, type = bool)
 parser.add_argument('--polar',default = True, type = bool)
-parser.add_argument('--chips', default = 0.0, type = float)
+parser.add_argument('--chips', default = 1.0, type = float)
 parser.add_argument('--chipi', default = 0.0, type = float)
 parser.add_argument('--chibs', default = 0.0, type = float)
 
 args = parser.parse_args()
 
-POLAR = arg.polar
+POLAR = args.polar
+SMALL = args.small
+WATER = args.water
+WLC = args.wlc
+SALT = args.salt
+
 chi_ps = args.chips
 chi_pi = args.chipi
 chi_bs = args.chibs
@@ -107,19 +100,29 @@ else:
 types = [A,B,C,W,CAT,ANI,CI,D]
 particle_types = len(types)
 
+aii = kappa/(2 * rho0)
+Aij = np.zeros((particle_types-1,particle_types-1))
+g_count = 0
+for i in range(particle_types-1):
+    for j in range(i,particle_types-1):
+        if i == j:
+            Aij[i][j] = aii
+            g_count += 1
+        elif  i != j:
+            Aij[i][j] = CHI[i][j]/rho0 + 2.0 * aii
+            g_count += 1
+
 if WLC == True:
     angle_types = 1
 else:
     angle_types = 0
 
+bond_types = 3
+
 properties = []
 bonds = []
 mol_angles = []
 angles = []
-
-N_sol = int(((1.0 - np.sum(phi)) * box_vol))
-if EXPLICIT_SOLVENT == True:
-    bond_types = 3
 
 q_plus = 0
 q_minus = 0
@@ -325,8 +328,8 @@ for i in range(n_ci//2):
 #         salt_charge +=  ANI[1]
 #     print(f"Total salt charge: {salt_charge}")
 
-if EXPLICIT_SOLVENT == True:
-    for _ in range(N_sol):
+if WATER == True:
+    for _ in range(n_sol):
         props = [atom_count,mol_count,W[0], 1/2]
         for xyz in range(dim):
             coord = np.random.uniform(0,1) * box_dim[xyz]
@@ -348,19 +351,6 @@ if WLC == True:
         for i in range(len(mol)-2):
             angles.append([angle_count,1, mol[i], mol[i+1], mol[i+2]])
             angle_count += 1
-
-aii = kappa/(2 * rho0)
-Aij = np.zeros((particle_types-1,particle_types-1))
-g_count = 0
-for i in range(particle_types-1):
-    for j in range(i,particle_types-1):
-        if i == j:
-            Aij[i][j] = aii
-            g_count += 1
-        elif  i != j:
-            Aij[i][j] = CHI[i][j]/rho0 + 2.0 * aii
-            g_count += 1
-
 
 with open("head.data", 'w') as fout:
     fout.writelines("Madatory string --> First rule of programing: if it works then don't touch it!\n\n")
@@ -433,9 +423,23 @@ if WLC == True:
     """
 
 input_file += f"\nn_gaussians {g_count}\n"
-for i in range(particle_types):
-    for j in range(i,particle_types):
+for i in range(particle_types-1):
+    for j in range(i,particle_types-1):
         input_file += f"gaussian {i+1} {j+1} {Aij[i][j]}  {1.000}\n"
 
 with open('input', 'w') as fout:       
     fout.writelines(input_file)
+
+
+descr = f"""Polymer density: {N * n_pol/box_vol}
+Solvent: {n_sol}
+Counter ions: {n_ci}
+Number density: {(n_pol * N + n_sol + n_ci)/box_vol}
+Polymer volume fraction: {N * n_pol/(n_pol * N + n_sol + n_ci)}
+Polarity: {POLAR}
+Salt: {SALT}
+Chi_PS: {chi_ps}
+Chi_BS: {chi_bs}
+Chi_PI: {chi_pi}"""
+
+print(descr)
