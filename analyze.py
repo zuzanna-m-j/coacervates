@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
-
 import glob
 import os
-from turtle import shape
 import numpy as np
 from celluloid import Camera
 import matplotlib.pyplot as plt
@@ -14,13 +12,24 @@ import pickle
 from matplotlib import cm
 import matplotlib.colors as mcolors
 import copy
-from skimage.morphology import dilation,remove_small_holes, square
+from skimage.morphology import dilation,remove_small_holes, square, remove_small_objects, closing, disk
 import matplotlib.colors
 import sys
+import matplotlib.ticker as mtick
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--chi', default = "chips")
+args = parser.parse_args()
+
+if args.chi == "chips":
+    chi_name = r"$\chi_{PS}$"
+elif args.chi == "chipi":
+    chi_name = r"$\chi_{PI}$"
 
 # colors = list(mcolors.CSS4_COLORS)[10::3]
-colors2 = ['orangered','teal', 'firebrick', 'dodgerblue', 'gold', 'forestgreen', 'darkred', 'darkorchid', 'darkorange', 'cornflowerblue', 'darkgreen', 'crimson', 'peru', 'olivedrab']
-colors  = ['orangered','teal', 'firebrick', 'dodgerblue', 'gold', 'forestgreen', 'darkred', 'darkorchid', 'darkorange', 'cornflowerblue', 'darkgreen', 'crimson', 'peru', 'olivedrab']
+colors2 = ['orangered','teal', 'dodgerblue', 'gold', 'forestgreen', 'darkred', 'darkorchid', 'darkorange', 'cornflowerblue', 'darkgreen', 'crimson', 'peru', 'olivedrab']
+colors  = ['orangered','teal', 'dodgerblue', 'gold', 'forestgreen', 'darkred', 'darkorchid', 'darkorange', 'cornflowerblue', 'darkgreen', 'crimson', 'peru', 'olivedrab']
 alpha = 1.0
 colors_rgb = []
 for color in colors:
@@ -32,7 +41,7 @@ colors = colors_rgb
 #rootdir = '/home/jello/results/AB-block-21-Jun-2022/non-polar'
 
 rootdir = os.getcwd()
-dirs = glob.glob(f'{rootdir}/*/')
+dirs = glob.glob(f'{rootdir}/[!_]*/')
 dirs.sort()
 
 polymer_rich = []
@@ -44,19 +53,28 @@ salt_poor = []
 CHI_PS = []
 HIST_DATA = []
 CLUST_SIZE = []
+RHO_THR = []
 
-
+RHO2CR = []
+RHO1CL = []
+RHO2CL = []
+YDATA = []
+ZDATA = []
+       
 with open(f"{rootdir}/summary.txt", "w") as f:
     f.writelines("chi_PS rho_p_rich rho_p_poor rho_ion_rich rho_ion_poor\n")
 
-for dir in dirs:
+with open(f"{rootdir}/summary2.txt", "w") as f:
+    f.writelines("chi_PS rho_pol_mean rho_salt_mean std_pol std_salt max_pol max_salt\n")
+
+for dir in dirs[-1:]:
 
     hist_data = []
 
     chi_ps = float(dir[-5:-1])
-    dir_name = f"{dir}results"
-    print(dir_name)
-    os.system(f"mkdir {dir_name}")
+    dir_name = f"{rootdir}"
+    #dir_name = f"{rootdir}/results"
+    #os.system(f"mkdir {dir_name}")
 
     data = []
 
@@ -64,7 +82,7 @@ for dir in dirs:
     files.sort()
 
     file = files[-1]
-    print(f"Analyzing: {file}")
+    print(f"\n\nAnalyzing: {file}")
 
     rho1_clusters = []
     rho1_clusters_ = []
@@ -90,7 +108,7 @@ for dir in dirs:
 
     data = [xdata,ydata,zdata,rhoA,rhoB,rhoC,rhoW,rhoCAT,rhoANI,rhoCI]
 
-    fig, ax = plt.subplots(1,3)
+    fig, ax = plt.subplots(1,4)
     camera = Camera(fig)
 
     ydata = []
@@ -107,20 +125,23 @@ for dir in dirs:
         rho2_ = []
 
         x = data[0]
-        # y = data[1]
-        # z = data[2]
+        y = data[1]
+        z = data[2]
 
         rho1 = data[3] + data[4] + data[5] #polymer density
         rho2 = data[9] #counter-ion density
 
         for i in range(len(rho1)):
             if x[i] == xslice:
-                # ydata.append(y[i])
-                # zdata.append(z[i])
+                ydata.append(y[i])
+                zdata.append(z[i])
                 rho1_.append(rho1[i])
                 rho2_.append(rho2[i])
         rho1data.append(rho1_)
         rho2data.append(rho2_)
+
+        YDATA.append(ydata)
+        ZDATA.append(zdata)
 
         # ydata = np.array(ydata)
         # zdata = np.array(zdata)
@@ -128,21 +149,32 @@ for dir in dirs:
     rho1data = np.array(rho1data)
     rho2data = np.array(rho2data)
 
+    YDATA = np.array(YDATA)
+    ZDATA = np.array(ZDATA)
+
     # normalize the data
 
-    max1 = (rho1data.ravel()).max()
-    max2 = (rho2data.ravel()).max()
+    mean1 = (rho1data.ravel()).mean()
+    mean2 = (rho2data.ravel()).mean()
 
-    rho1data /=max1
-    rho2data /=max2
+    rho1data /=mean1
+    rho2data /=mean2
 
     m1 = (rho1data.ravel()).mean()
     m2 = (rho2data.ravel()).mean()
 
+    max1 = (rho1data.ravel()).max()
+    max2 = (rho2data.ravel()).max()
+
     std1 = np.std(rho1data.ravel())
     std2 = np.std(rho2data.ravel())
 
-    print("Generating density plots...")
+    print(f"Average polymer density: {mean1}, average CI density: {mean2}")
+    print(f"Max polymer density: {max1}, max CI density: {max2}")
+
+    with open(f"{rootdir}/summary2.txt", "a+") as f:
+        f.writelines(f'{chi_ps} {mean1} {mean2} {std1} {std2} {max1} {max2}\n')
+
 
     rho1rich = []
     rho2rich = []
@@ -153,13 +185,6 @@ for dir in dirs:
     #density correlation
 
     for x,xslice in enumerate(xslices):
-        density_corr = []
-        for i in range(len(rho1data[x])):
-            density_corr.append(np.exp(-abs(rho1data[x][i] -  rho2data[x][i])))
-        density_corr = np.array(density_corr)
-
-    #thresholded data - only pick regions that have polymer density beyond one std from the mean
-
         rho1_thr = []
         for i in range(len(rho1data[x])):
             if abs(rho1data[x][i] - m1) < std1:
@@ -168,15 +193,53 @@ for dir in dirs:
                 rho1_thr.append(1)
         rho1_thr = np.array(rho1_thr)
 
+        density_corr = np.zeros(len(rho1data[x]))
+        for i in range(len(rho1data[x])):
+            if rho1_thr[i] == 1:
+                density_corr[i] = (rho2data[x][i] - m2)/std2
+        
         zdim, ydim = (rho1_thr.reshape(-1,len(xslices))).shape
-
         img  = rho1_thr.reshape(-1,len(xslices))
-        img = dilation(img,square(9))
+        img = remove_small_holes(img, 5)
+        img = remove_small_objects(img, 5)
+        corona = (dilation(img,square(9))).astype(int) - img.astype(int)
+
+        rho2_thr = []
+        for i in range(len(rho2data[x])):
+            if abs(rho2data[x][i] - m2) < std2:
+                rho2_thr.append(0)
+            else:
+                rho2_thr.append(1)
+        rho2_thr = np.array(rho2_thr)
+        img2 = rho2_thr.reshape(-1,len(xslices))
+
+
         labels = label(img)
         regions = regionprops(labels)
 
         for point in rho1data[x]:
             hist_data.append(point)
+        
+        # rho2corona = []
+        # rho2cluster = []
+        # rho1cluster = []
+
+        # for t in range(len(rho1_thr)):
+        #     if flat_corona[t] == 1:
+        #         rho2corona.append([xslices[x], YDATA[x,t], ZDATA[x,t], rho1data[x,t]])
+        #     else:
+        #         rho2corona.append([xslices[x], YDATA[x,t], ZDATA[x,t], 0])
+       
+        #     if rho1_thr[t] == 1:
+        #         rho1cluster.append([xslices[x], YDATA[x,t], ZDATA[x,t], rho1data[x,t]])
+        #         rho2cluster.append([xslices[x], YDATA[x,t], ZDATA[x,t], rho1data[x,t]])
+        #     else:
+        #         rho1cluster.append([xslices[x], YDATA[x,t], ZDATA[x,t], 0])
+        #         rho2cluster.append([xslices[x], YDATA[x,t], ZDATA[x,t], 0])
+
+        # rho2corona = np.array(rho2corona)
+        # rho2cluster = np.array(rho2cluster)
+        # rho1cluster = np.array(rho1cluster)
 
         # Region preview - sanity check
         # fig, ax = plt.subplots()
@@ -193,7 +256,7 @@ for dir in dirs:
 
         # Diplay density data
 
-        ax[0].imshow(rho1data[x].reshape(-1,len(xslices)), cmap = "Reds")
+        ax[0].imshow(img, cmap = "Reds")
         ax[0].set_xlim(0,ydim)
         ax[0].set_ylim(0,zdim)
         ax[0].set_title(r"Polymer density")
@@ -201,21 +264,46 @@ for dir in dirs:
         ax[0].set_xlabel('Y')
         ax[0].set_ylabel('Z')
 
-        ax[1].imshow(density_corr.reshape(-1,len(xslices)), cmap = "Reds")
+        ax[1].imshow(corona, cmap = "Reds")
         ax[1].set_xlim(0,ydim)
         ax[1].set_ylim(0,zdim)
-        ax[1].set_title(r"Density correlation")
+        ax[1].set_title(r"Ion density - cluster")
         ax[1].text(ydim + 1, 0.0, f"X: {xslice}")
         ax[1].set_xlabel('Y')
         ax[1].set_ylabel('Z')
 
-        ax[2].imshow(rho2data[x].reshape(-1,len(xslices)), cmap = "Reds")
+        ax[2].imshow(img2, cmap = "Greens")
         ax[2].set_xlim(0,ydim)
         ax[2].set_ylim(0,zdim)
-        ax[2].set_title(r"Ion density")
+        ax[2].set_title(r"Ion density - corona")
         ax[2].text(ydim + 1, 0.0, f"X: {xslice}")
         ax[2].set_xlabel('Y')
         ax[2].set_ylabel('Z')
+
+
+        # ax[3].imshow(rho2corona.reshape(-1,len(xslices)), cmap = "Reds")
+        # ax[3].set_xlim(0,ydim)
+        # ax[3].set_ylim(0,zdim)
+        # ax[3].set_title(r"Ion density - corona")
+        # ax[3].text(ydim + 1, 0.0, f"X: {xslice}")
+        # ax[3].set_xlabel('Y')
+        # ax[3].set_ylabel('Z')
+
+        # ax[1].imshow(density_corr.reshape(-1,len(xslices)), cmap = "Reds")
+        # ax[1].set_xlim(0,ydim)
+        # ax[1].set_ylim(0,zdim)
+        # ax[1].set_title(r"Density correlation")
+        # ax[1].text(ydim + 1, 0.0, f"X: {xslice}")
+        # ax[1].set_xlabel('Y')
+        # ax[1].set_ylabel('Z')
+
+        # ax[3].imshow(density_corr.reshape(-1,len(xslices)), cmap = "RdYlGn")
+        # ax[3].set_xlim(0,ydim)
+        # ax[3].set_ylim(0,zdim)
+        # ax[3].set_title(r"Ion density")
+        # ax[3].text(ydim + 1, 0.0, f"X: {xslice}")
+        # ax[3].set_xlabel('Y')
+        # ax[3].set_ylabel('Z')
 
         camera.snap()
 
@@ -237,16 +325,13 @@ for dir in dirs:
             rho1poor.append(r1)
             rho2poor.append(r2)
 
-        # find clusters
-        
-    print("Making clusters...") 
-    for x,xslice in enumerate(xslices):
-
         if xslice == xslices[0]:
+            print("Making clusters...")
             for region in regions:
                 rho1_clusters.append([[x,region.coords]])
 
         else:
+            print(f"{x/len(xslices) * 100:3.1f}%", end = " ", flush=True)
             for regid,region in enumerate(regions):
                 overlap = False
                 neighs = []
@@ -266,16 +351,15 @@ for dir in dirs:
                                         break
                                     dy  = abs(coord[1] - p_region[m][1][:,1])
                                     for i in range(len(dy)):
-                                        if dy[i] >= ydim//2:
+                                        if dy[i] >= int(ydim/2):
                                             dy[i] = ydim - dy[i]
 
                                     dz  = abs(coord[0] - p_region[m][1][:,0])
                                     for i in range(len(dz)):
                                         if dz[i] >= int(zdim/2):
                                             dz[i] = zdim - dz[i]
-
                                     dr = dy + dz
-                                    if min(dr) <= 1:
+                                    if min(dr) <= np.sqrt(2):
                                         overlap = True
                             if overlap == True:
                                 neighs.append(rid)
@@ -298,12 +382,18 @@ for dir in dirs:
                 else:
                         rho1_clusters.append([[x, region.coords]])
 
+    #     RHO2CR.append(rho2corona)
+    #     RHO1CL.append(rho1cluster)
+    #     RHO2CL.append(rho1cluster)
 
+    # RHO2CR = np.array(RHO2CR)
+    # RHO1CL = np.array(RHO1CL)
+    # RHO2CL = np.array(RHO2CL)
     HIST_DATA.append(hist_data)
     CHI_PS.append(chi_ps)
 
     res = camera.animate(interval=500)
-    res.save(f'{dir_name}/rho.gif', dpi = 500)
+    res.save(f'{dir_name}/rho{str(chi_ps)}.gif', dpi = 500)
 
     # plt.show()
 
@@ -328,18 +418,36 @@ for dir in dirs:
     polymer_poor.append((rho1poor_avg-m1)/std1)
     salt_poor.append((rho2poor_avg - m2)/std2)
     
-    rho_file = open(f"{dir_name}/rho1_clusters.pkl", "wb")
+    rho_file = open(f"{dir_name}/rho1_clusters2.pkl", "wb")
     pickle.dump(rho1_clusters,rho_file)
     rho_file.close()
 
-    rho_file = open(f"{dir_name}/rho1_clusters.pkl", "rb")
+    rho_file = open(f"{dir_name}/rho1_clusters2.pkl", "rb")
     clusters = pickle.load(rho_file)
     rho_file.close()
 
+    # xcl = RHO2CL[:,0,:]
+    # xcl[RHO2CL[:,3,:] == 0] = np.nan
+    # ycl = RHO2CL[:,1,:]
+    # ycl[RHO2CL[:,3,:] == 0] = np.nan
+    # zcl = RHO2CL[:,2,:]
+    # zcl[RHO2CL[:,3,:] == 0] = np.nan
+    # vcl = RHO2CL[:,3,:]
+    # vcl[RHO2CL[:,3,:] == 0] = 0
 
+    # xcl = RHO2CR[:,0,:]
+    # xcl[RHO2CR[:,3,:] == 0] = np.nan
+    # ycl = RHO2CR[:,1,:]
+    # ycl[RHO2CL[:,3,:] == 0] = np.nan
+    # zcl = RHO2CL[:,2,:]
+    # zcl[RHO2CL[:,3,:] == 0] = np.nan
+    # vcl = RHO2CL[:,3,:]
+    # vcl[RHO2CL[:,3,:] == 0] = 0
+
+    print("Rendering clusters...")
     j = 0
     cluster_sizes = []
-    fig = plt.figure(dpi = 300)
+    fig = plt.figure(dpi = 500)
     ax = fig.add_subplot(1, 1, 1, projection='3d')
     for cluster in clusters:
         if cluster != None:
@@ -357,15 +465,62 @@ for dir in dirs:
                     y.append(y_[i])
                     z.append(z_[i])
 
-            if True:
-
+            if len(z)>100:
+                
                 CLUST_SIZE.append(len(z))
 
                 voxel = np.zeros((len(xslices),ydim,zdim))
                 for i in range(len(x)):
                     voxel[x[i],y[i],z[i]] = 1
                 color = colors[j]
+                ax.voxels(voxel, facecolors = color)
+                # ax.scatter(x,y,z,s = 0.2, c = colors[j], alpha = 1.0, label = f"{j}")
+                #ax.scatter(xi,zi,yi,s = 10.0, c = 'forestgreen', alpha = 0.25, label = f"{j}", norm = plt.Normalize(0, 10))
 
+                ax.set_xlabel("X")
+                ax.set_ylabel("Y")
+                ax.set_zlabel("Z")
+                ax.set_box_aspect((len(xslices),ydim,zdim))  # aspect ratio is 1:1:1 in data space
+                j += 1
+
+    plt.title("Polymer density voxels")
+    plt.savefig(f"{dir_name}/voxels-{str(chi_ps)}.png", dpi = 500)
+
+
+    colors  = ['orangered','teal', 'dodgerblue', 'gold', 'forestgreen', 'darkred', 'darkorchid', 'darkorange', 'cornflowerblue', 'darkgreen', 'crimson', 'peru', 'olivedrab']
+    alpha = 0.3
+    colors_rgb = []
+    for color in colors:
+        c = matplotlib.colors.to_rgba(color)
+        colors_rgb.append((c[0],c[1],c[2],alpha))
+    colors = colors_rgb
+    print("Rendering clusters with ions...")
+    j = 0
+    cluster_sizes = []
+    fig = plt.figure(dpi = 1000)
+    ax = fig.add_subplot(1, 1, 1, projection='3d')
+    for cluster in clusters:
+        if cluster != None:
+            x = []
+            y = []
+            z = []
+
+            for slice in cluster:
+
+                x_ = slice[0]
+                y_ = slice[1][:,1]
+                z_ = slice[1][:,0]
+                for i in range(len(y_)):
+                    x.append(x_)
+                    y.append(y_[i])
+                    z.append(z_[i])
+
+            if len(z)>100:
+
+                voxel = np.zeros((len(xslices),ydim,zdim))
+                for i in range(len(x)):
+                    voxel[x[i],y[i],z[i]] = 1
+                color = colors[j]
                 ax.voxels(voxel, facecolors = color)
 
                 # ax.scatter(x,z,y,s = 10.0, c = [j] * len(z), cmap = "viridis", alpha = 0.25, label = f"{j}", norm = plt.Normalize(0, 10))
@@ -376,44 +531,68 @@ for dir in dirs:
                 ax.set_zlabel("Z")
                 ax.set_box_aspect((len(xslices),ydim,zdim))  # aspect ratio is 1:1:1 in data space
                 j += 1
-    plt.title("Polymer density voxels")
-    plt.savefig(f"{dir_name}/voxels.png", dpi = 500)
 
+    # for m in range(len(RHO2CR)):
+    #     for n in range(len(RHO2CR[m])):
+    #         xcr = RHO2CR[m,n,0]
+    #         ycr = RHO2CR[m,n,1]
+    #         zcr = RHO2CR[m,n,2]
+    #         vcr = RHO2CR[m,n,3]
+
+
+
+    # xcr = RHO2CR[:,0,:]
+    # xcr[RHO2CR[:,3,:] == 0] = np.nan
+    # ycr = RHO2CR[:,1,:]
+    # ycr[RHO2CR[:,3,:] == 0] = np.nan
+    # zcr = RHO2CR[:,2,:]
+    # zcr[RHO2CR[:,3,:] == 0] = np.nan
+    # vcr = RHO2CR[:,3,:]= np.nan
+    # vcr[RHO2CR[:,3,:] == 0] = np.nan
+
+    # ax.scatter(xcr, ycr, zcr,s = 1, c = vcr, cmap = 'Greens')
+    # ax.scatter(xcl, ycl, zcl,s = 1, c = 'green')
+
+    plt.title("Polymer density voxels")
+    plt.savefig(f"{dir_name}/voxels-ci-{str(chi_ps)}.png", dpi = 500)
 
 fig, ax = plt.subplots(2,1)
-plt.suptitle("Concentration in different phases")
+plt.suptitle("Density distribution")
 
 ax[0].set_title("Polymer concentration")
 ax[0].plot(CHI_PS, polymer_rich, 'o-', label = "polymer-rich phase")
 ax[0].plot(CHI_PS, polymer_poor, 'o-', label = "polymer-poor phase")
-ax[0].set_xlabel(r"$\chi_{PS}$")
+ax[0].set_xlabel(chi_name)
 ax[0].set_ylabel(r"$\frac{\rho_{pol} - <\rho_{pol}>}{\sigma_{pol}}$")
 ax[0].legend()
 
 ax[1].set_title("Salt concentration")
 ax[1].plot(CHI_PS, salt_rich, 'o-', label = "polymer-rich phase")
-ax[1].plot(CHI_PS, salt_rich, 'o-', label = "polymer-rich phase")
-ax[1].set_xlabel(r"$\chi_{PS}$")
+ax[1].plot(CHI_PS, salt_poor, 'o-', label = "polymer-poor phase")
+ax[1].set_xlabel(chi_name)
 ax[1].set_ylabel(r"$\frac{\rho_{salt} - <\rho_{salt}>}{\sigma_{salt}}$")
 ax[1].legend()
 
 plt.tight_layout()
-plt.savefig(fname = f"{rootdir}/density.png",dpi = 500)
+plt.savefig(fname = f"{dir_name}/density2.png",dpi = 500)
 
+weights = []
 fig, ax = plt.subplots()
-ax.hist(HIST_DATA, bins = 200, color=colors2[:len(HIST_DATA)], label=CHI_PS)
-ax.set_xlabel(r"$\frac{\rho}{\rho_{max}}$")
-ax.set_ylabel("Count")
-ax.set_yscale("log")
-plt.suptitle("Polymer density distribution")
+for i in range(len(HIST_DATA)):
+    weights.append(np.ones(len(HIST_DATA[i]))/len(HIST_DATA[i]))
+ax.hist(HIST_DATA, bins = 30, color=colors2[:len(HIST_DATA)], label=CHI_PS, weights=weights)
+ax.set_xlabel(r"$\frac{\rho}{\rho_{mean}}$")
+ax.set_ylabel("Volume fraction")
+ax.yaxis.set_major_formatter(mtick.PercentFormatter(1))
+ax.set_yscale('log')
+plt.suptitle("Polymer clusters")
 plt.tight_layout()
 plt.legend()
-plt.savefig(f"{rootdir}/histogram.png", dpi = 500)
+plt.savefig(f"histogram.png", dpi = 500)
 
-h_file = open(f"{rootdir}/hist.pkl", "wb")
+h_file = open(f"{dir_name}/hist2.pkl", "wb")
 pickle.dump(HIST_DATA,h_file)
-rho_file.close()
-
+h_file.close()
 
 # fig, ax = plt.subplots()
 
