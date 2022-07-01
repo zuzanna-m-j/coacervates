@@ -1,5 +1,23 @@
 #!/usr/bin/env python3
 
+"""
+File: gen-input.py
+Author: Zuzanna M. J.
+Description:
+***
+Code generates initial configuration to be run using gpu-tild code.
+Command-line arhuments can be used to modify the input. Default values are provided.
+Output can be analyzed using analyze-data.py provided in the package.
+
+Command-line arguments:
+
+ - 
+ -
+ -
+ -
+
+
+"""
 from ast import arg
 import random
 import numpy as np
@@ -10,17 +28,28 @@ from numpy import pi, sqrt
 import argparse
 
 
-
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--wlc', default = False, type = bool)
 parser.add_argument('--small', default = False, type = bool)
-parser.add_argument('--salt', default = 0.0, type = float)
 parser.add_argument('--water',default = True, type = bool)
 parser.add_argument('--polar',default = True, type = bool)
+
+parser.add_argument('--salt', default = 0.0, type = float)
 parser.add_argument('--chips', default = 1.0, type = float)
 parser.add_argument('--chipi', default = 0.0, type = float)
 parser.add_argument('--chibs', default = 0.0, type = float)
+
+parser.add_argument('--lx', default = 20.0, type = float)
+parser.add_argument('--ly', default = 20.0, type = float)
+parser.add_argument('--lz', default = 100.0, type = float)
+
+parser.add_argument('--Nx', default = 45, type = int)
+parser.add_argument('--Ny', default = 45, type = int)
+parser.add_argument('--Nz', default = 215, type = int)
+
+parser.add_argument('--scale', default = 1.0, type = float)
+
 
 args = parser.parse_args()
 
@@ -28,11 +57,19 @@ POLAR = args.polar
 SMALL = args.small
 WATER = args.water
 WLC = args.wlc
-SALT = args.salt
 
+SALT = args.salt
 chi_ps = args.chips
 chi_pi = args.chipi
 chi_bs = args.chibs
+
+lx = args.lx * args.scale
+ly = args.ly * args.scale
+lz = args.lz * args.scale
+
+Nx = int(args.Nx * args.scale)
+Ny = int(args.Ny * args.scale)
+Nz = int(args.Nz * args.scale)
 
 N_a = 25
 N_b = 0
@@ -41,13 +78,6 @@ N = N_a + N_b + N_c
 seq = N_a * "A" + N_b * "B" + N_c * "C"
 
 dim = 3
-lx = 20
-ly = 20
-lz = 100
-
-Nx = 47
-Ny = 47
-Nz = 215
 
 box_dim = [lx, ly, lz]
 box_vol = lx * ly * lz
@@ -226,9 +256,9 @@ for m_num in range(n_pol):
 
             theta = random.uniform(-np.pi, np.pi)
             phi = random.uniform(- 2 * np.pi, 2 * np.pi)
-            dx = 1.0/2 * np.cos(phi)*np.sin(theta) + properties[-1][4]
-            dy = 1.0/2 * np.sin(phi)*np.sin(theta) + properties[-1][5]
-            dz = 1.0/2 * np.cos(theta) + properties[-1][6]
+            dx = properties[-1][4]
+            dy = properties[-1][5]
+            dz = properties[-1][6]
 
             props = [atom_count,mol_count,D[0],drude_charge,dx,dy,dz]
             properties.append(copy.deepcopy(props))
@@ -241,7 +271,7 @@ for m_num in range(n_pol):
             props.append(atom_charge)
 
             if chain_pos == 0:
-                for xyz in range(dim-2):
+                for xyz in range(dim-1):
                     coord = np.random.uniform(0,box_dim[xyz])
                     props.append(coord)
                 if SMALL == True:
@@ -339,8 +369,8 @@ if WATER == True:
         bonds.append([bond_count,3,atom_count,atom_count+1])
         bond_count += 1
         atom_count += 1
-        dx = 1.0/2 + properties[-1][4]
-        props = [atom_count,mol_count,D[0],-1/2,dx,dy,dz]
+        dx = properties[-1][4]
+        props = [atom_count,mol_count,D[0],-1/2,dx,dx,dx]
         properties.append(copy.deepcopy(props))
         atom_count += 1
         mol_count += 1
@@ -396,12 +426,12 @@ with open('tail.data', 'w') as fout:
 input_file = f"""Dim 3
 
 max_steps 2000001
-log_freq 5000
+log_freq 1000
 binary_freq 10000
 traj_freq 500000
 pmeorder 1
 
-charges {55:7f} {0.5}
+charges {75:7f} {0.5}
 
 delt {0.005:7f}
 
@@ -430,16 +460,25 @@ for i in range(particle_types-1):
 with open('input', 'w') as fout:       
     fout.writelines(input_file)
 
+file_name = os.getcwd()
 
-descr = f"""Polymer density: {N * n_pol/box_vol}
+descr = f"""File: {file_name}
+Polymer density: {N * n_pol/box_vol}
 Solvent: {n_sol}
 Counter ions: {n_ci}
 Number density: {(n_pol * N + n_sol + n_ci)/box_vol}
 Polymer volume fraction: {N * n_pol/(n_pol * N + n_sol + n_ci)}
 Polarity: {POLAR}
 Salt: {SALT}
+Small: {SMALL}
 Chi_PS: {chi_ps}
 Chi_BS: {chi_bs}
-Chi_PI: {chi_pi}"""
+Chi_PI: {chi_pi}
+BOX: {lx} {ly} {lz}
+N_GRID {Nx} {Ny} {Nz}
 
+"""
+with open("../../info.txt", 'a+') as f:
+    f.writelines(descr)
 print(descr)
+
