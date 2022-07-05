@@ -31,9 +31,10 @@ import argparse
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--wlc', default = False, type = bool)
-parser.add_argument('--small', default = False, type = bool)
+parser.add_argument('--flat', default = False, type = bool)
 parser.add_argument('--water',default = True, type = bool)
-parser.add_argument('--polar',default = True, type = bool)
+parser.add_argument('--polar',default = False, type = bool)
+parser.add_argument('--midpush',default = False, type = bool)
 
 parser.add_argument('--salt', default = 0.0, type = float)
 parser.add_argument('--chips', default = 1.0, type = float)
@@ -44,19 +45,25 @@ parser.add_argument('--lx', default = 20.0, type = float)
 parser.add_argument('--ly', default = 20.0, type = float)
 parser.add_argument('--lz', default = 100.0, type = float)
 
+parser.add_argument('--zmin', default = 50, type = float)
+parser.add_argument('--zmax', default = 75, type = float)
+
 parser.add_argument('--Nx', default = 45, type = int)
 parser.add_argument('--Ny', default = 45, type = int)
 parser.add_argument('--Nz', default = 215, type = int)
 
 parser.add_argument('--scale', default = 1.0, type = float)
+parser.add_argument('--dim', default = 3, type = int)
 
 
 args = parser.parse_args()
 
 POLAR = args.polar
-SMALL = args.small
+FLAT = args.flat
 WATER = args.water
 WLC = args.wlc
+DIM = args.dim
+MIDPUSH = args.midpush
 
 SALT = args.salt
 chi_ps = args.chips
@@ -66,6 +73,9 @@ chi_bs = args.chibs
 lx = args.lx * args.scale
 ly = args.ly * args.scale
 lz = args.lz * args.scale
+
+zmin = args.zmin
+zmax = args.zmax
 
 Nx = int(args.Nx * args.scale)
 Ny = int(args.Ny * args.scale)
@@ -77,20 +87,22 @@ N_c = 25
 N = N_a + N_b + N_c
 seq = N_a * "A" + N_b * "B" + N_c * "C"
 
-dim = 3
-
 box_dim = [lx, ly, lz]
-box_vol = lx * ly * lz
+
+if FLAT == True:
+    box_vol = lx * ly
+else:
+    box_vol = lx * ly * lz
+
 
 rho0 = 3.0
 phi = 0.045
 kappaN = 5 * 50
 kappa = kappaN/N
 
-n_pol = int(0.045 * box_vol * rho0/N)
-n_ci =  int(0.045 * box_vol * rho0 * (N_a + N_b)/N)
+n_pol = int(phi * box_vol * rho0/N)
+n_ci =  int(phi * box_vol * rho0 * (N_a + N_b)/N)
 n_sol = int(rho0 * box_vol - N * n_pol - n_ci)
-
 CHI = [
     [0,0,0,chi_ps,chi_pi,chi_pi,chi_pi],
     [0,0,0,chi_bs,chi_pi,chi_pi,chi_pi],
@@ -201,40 +213,22 @@ for m_num in range(n_pol):
 
 
             if chain_pos == 0:
-                for xyz in range(dim-1):
+                for xyz in range(3):
                     coord = np.random.uniform(0,box_dim[xyz])
                     props.append(coord)
-                if SMALL == True:
-                    z = np.random.uniform(2/5 * box_dim[2], 3/5 *box_dim[2])
-                else:
-                    z = np.random.uniform(0,box_dim[2])
-                props.append(z)
+                if FLAT == True:
+                    props[-1] = 0.0
             else:
-                if properties[-1][2] != D[0]:
-                    theta = random.uniform(-np.pi, np.pi)
-                    phi = random.uniform(- 2 * np.pi, 2 * np.pi)
-                    x = 1.0 * np.cos(phi)*np.sin(theta) + properties[-1][4]
-                    y = 1.0 * np.sin(phi)*np.sin(theta) + properties[-1][5]
-                    z = 1.0 * np.cos(theta) + properties[-1][6]
-                    if SMALL == True:
-                        while 2/5 * box_dim[2] > z > 3/5 *box_dim[2]:
-                            z = 1.0 * np.cos(theta) + properties[-1][6]
-                    props.append(x)
-                    props.append(y)
-                    props.append(z)
-
-                else:
-                    theta = random.uniform(-np.pi, np.pi)
-                    phi = random.uniform(- 2 * np.pi, 2 * np.pi)
-                    x = 1.0 * np.cos(phi)*np.sin(theta) + properties[-2][4]
-                    y = 1.0 * np.sin(phi)*np.sin(theta) + properties[-2][5]
-                    z = 1.0 * np.cos(theta) + properties[-2][6]
-                    if SMALL == True:
-                        while 2/5 * box_dim[2] > z > 3/5 *box_dim[2]:
-                            z = 1.0 * np.cos(theta) + properties[-1][6]                    
-                    props.append(x)
-                    props.append(y)
-                    props.append(z)
+                theta = random.uniform(-np.pi, np.pi)
+                phi = random.uniform(- 2 * np.pi, 2 * np.pi)
+                x = 1.0 * np.cos(phi)*np.sin(theta) + properties[-1][4]
+                y = 1.0 * np.sin(phi)*np.sin(theta) + properties[-1][5]
+                z = 1.0 * np.cos(theta) + properties[-1][6]
+                if FLAT == True:
+                    z = 0.0
+                props.append(x)
+                props.append(y)
+                props.append(z)
             
             # add atom properties to the list
             properties.append(copy.deepcopy(props))
@@ -254,8 +248,6 @@ for m_num in range(n_pol):
 
             # add the drude oscilator
 
-            theta = random.uniform(-np.pi, np.pi)
-            phi = random.uniform(- 2 * np.pi, 2 * np.pi)
             dx = properties[-1][4]
             dy = properties[-1][5]
             dz = properties[-1][6]
@@ -264,48 +256,27 @@ for m_num in range(n_pol):
             properties.append(copy.deepcopy(props))
             atom_count += 1
 
-        
-
         else:
             atom_charge = qm
             props.append(atom_charge)
 
             if chain_pos == 0:
-                for xyz in range(dim-1):
+                for xyz in range(3):
                     coord = np.random.uniform(0,box_dim[xyz])
                     props.append(coord)
-                if SMALL == True:
-                    z = np.random.uniform(2/5 * box_dim[2], 3/5 *box_dim[2])
-                else:
-                    z = np.random.uniform(0,box_dim[2])
-                props.append(z)
+                if FLAT == True:
+                    props[-1] == 0.0
             else:
-
-                if properties[-1][2] != D[0]:
-                    theta = random.uniform(-np.pi, np.pi)
-                    phi = random.uniform(- 2 * np.pi, 2 * np.pi)
-                    x = 1.0 * np.cos(phi)*np.sin(theta) + properties[-1][4]
-                    y = 1.0 * np.sin(phi)*np.sin(theta) + properties[-1][5]
-                    z = 1.0 * np.cos(theta) + properties[-1][6]
-                    if SMALL == True:
-                        while 2/5 * box_dim[2] > z > 3/5 *box_dim[2]:
-                            z = 1.0 * np.cos(theta) + properties[-1][6] 
-                    props.append(x)
-                    props.append(y)
-                    props.append(z)
-
-                else:
-                    theta = random.uniform(-np.pi, np.pi)
-                    phi = random.uniform(- 2 * np.pi, 2 * np.pi)
-                    x = 1.0 * np.cos(phi)*np.sin(theta) + properties[-2][4]
-                    y = 1.0 * np.sin(phi)*np.sin(theta) + properties[-2][5]
-                    z = 1.0 * np.cos(theta) + properties[-2][6]
-                    if SMALL == True:
-                        while 2/5 * box_dim[2] > z > 3/5 *box_dim[2]:
-                            z = 1.0 * np.cos(theta) + properties[-1][6]  
-                    props.append(x)
-                    props.append(y)
-                    props.append(z)
+                theta = random.uniform(-np.pi, np.pi)
+                phi = random.uniform(- 2 * np.pi, 2 * np.pi)
+                x = 1.0 * np.cos(phi)*np.sin(theta) + properties[-1][4]
+                y = 1.0 * np.sin(phi)*np.sin(theta) + properties[-1][5]
+                z = 1.0 * np.cos(theta) + properties[-1][6]
+                if FLAT == True:
+                    z = 0.0
+                props.append(x)
+                props.append(y)
+                props.append(z)
             
             properties.append(copy.deepcopy(props))
             mol_ang.append(atom_count)
@@ -320,16 +291,16 @@ for m_num in range(n_pol):
 
 for i in range(n_ci//2):
     props = [atom_count,mol_count,CI[0], 1]
-    for xyz in range(dim):
+    for xyz in range(3):
         coord = np.random.uniform(0,1) * box_dim[xyz]
-        props.append(coord)     
+        props.append(coord)   
     properties.append(copy.deepcopy(props))
     atom_count += 1
     mol_count += 1
 
 for i in range(n_ci//2):
     props = [atom_count,mol_count,CI[0], -1]
-    for xyz in range(dim):
+    for xyz in range(3):
         coord = np.random.uniform(0,1) * box_dim[xyz]
         props.append(coord)     
     properties.append(copy.deepcopy(props))
@@ -340,7 +311,7 @@ for i in range(n_ci//2):
 #     salt_charge = 0
 #     for _ in range(N_cat):
 #         props = [atom_count,mol_count,CAT[0], CAT[1]]
-#         for xyz in range(dim):
+#         for xyz in range(DIM):
 #             coord = np.random.uniform(0,1) * box_dim[xyz]
 #             props.append(coord)     
 #         properties.append(copy.deepcopy(props))
@@ -349,7 +320,7 @@ for i in range(n_ci//2):
 #         salt_charge += CAT[1]
 #     for _ in range(N_anion):
 #         props = [atom_count,mol_count,ANI[0], ANI[1]]
-#         for xyz in range(dim):
+#         for xyz in range(DIM):
 #             coord = np.random.uniform(0,1) * box_dim[xyz]
 #             props.append(coord)     
 #         properties.append(copy.deepcopy(props))
@@ -361,7 +332,7 @@ for i in range(n_ci//2):
 if WATER == True:
     for _ in range(n_sol):
         props = [atom_count,mol_count,W[0], 1/2]
-        for xyz in range(dim):
+        for xyz in range(3):
             coord = np.random.uniform(0,1) * box_dim[xyz]
             props.append(coord)     
         properties.append(copy.deepcopy(props))
@@ -383,6 +354,48 @@ if WLC == True:
             angle_count += 1
 
 with open("head.data", 'w') as fout:
+    fout.writelines("Madatory string --> First rule of programing: if it works then don't touch it!\n\n")
+    fout.writelines(f'{atom_count - 1} atoms\n')
+    fout.writelines(f'{bond_count - 1} bonds\n')
+    if WLC == True:
+        fout.writelines(f'{angle_count - 1} angles\n')
+    else:
+        fout.writelines(f'{0} angles\n')
+    fout.writelines('\n')
+    fout.writelines(f'{particle_types} atom types\n')
+    fout.writelines(f'{bond_types} bond types\n')
+    fout.writelines(f'{angle_types} angle types\n')
+    fout.writelines('\n')
+    fout.writelines(f'0.000 {box_dim[1]} xlo xhi\n')
+    fout.writelines(f'0.000 {box_dim[1]} ylo yhi\n')
+    fout.writelines(f'0.000 {box_dim[2]} zlo zhi\n')
+    fout.writelines('\n')
+    fout.writelines('Masses\n')
+    fout.writelines('\n')
+    for i in range(len(types)):
+        fout.writelines(f'{i + 1} {1.000} \n')
+
+with open('atoms.data','w') as fout:
+    for i in range(9):
+        fout.writelines(f"{atom_count - 1}\n")
+    for line in properties:
+        fout.writelines(f"{line[0]} {line[2]} {line[1]} {line[4]} {line[5]} {line[6]} {line[3]}\n")
+
+with open('tail.data', 'w') as fout:       
+    fout.writelines('\n')
+    fout.writelines('Bonds\n')
+    fout.writelines('\n')
+    for line in bonds:
+        fout.writelines(f"{line[0]} {line[1]}  {line[2]} {line[3]}\n")
+    if WLC == True:
+        fout.writelines('\n')
+        fout.writelines('Angles\n')
+        fout.writelines('\n')
+        for line in angles:
+            fout.writelines(f"{line[0]} {line[1]}  {line[2]} {line[3]} {line[4]}\n")
+
+
+with open("head2.data", 'w') as fout:
     fout.writelines("Madatory string --> First rule of programing: if it works then don't touch it!\n\n")
     fout.writelines(f'{atom_count - 1} atoms\n')
     fout.writelines(f'{bond_count - 1} bonds\n')
@@ -423,15 +436,62 @@ with open('tail.data', 'w') as fout:
         for line in angles:
             fout.writelines(f"{line[0]} {line[1]}  {line[2]} {line[3]} {line[4]}\n")
 
-input_file = f"""Dim 3
+input_file = f"""Dim {DIM}
 
-max_steps 2000001
+max_steps 1000001
 log_freq 1000
 binary_freq 10000
 traj_freq 500000
 pmeorder 1
 
-charges {75:7f} {0.5}
+charges {55:7f} {0.5}
+
+delt {0.005:7f}
+
+read_data input.data
+integrator all GJF
+
+Nx {Nx}
+Ny {Ny}
+Nz {Nz}
+
+bond 1 harmonic {1.0:7f} {0.0:7f}
+bond 2 harmonic {2.5:7f} {0.0:7f}
+bond 3 harmonic {2.5:7f} {0.0:7f}
+
+"""
+
+if MIDPUSH == True:
+    input_file += f"""group polya type 1
+group polyc type 3
+extraforce polya midpush 0.05
+extraforce polyc midpush 0.05
+
+"""
+
+if WLC == True:
+    input_file += f"""angle 1 wlc {1.0:7f}
+    """
+
+input_file += f"\nn_gaussians {g_count}\n"
+for i in range(particle_types-1):
+    for j in range(i,particle_types-1):
+        input_file += f"gaussian {i+1} {j+1} {Aij[i][j]}  {1.000}\n"
+
+with open('input', 'w') as fout:       
+    fout.writelines(input_file)
+
+
+
+input_file = f"""Dim {DIM}
+
+max_steps 1500001
+log_freq 1000
+binary_freq 10000
+traj_freq 500000
+pmeorder 1
+
+charges {55:7f} {0.5}
 
 delt {0.005:7f}
 
@@ -457,28 +517,39 @@ for i in range(particle_types-1):
     for j in range(i,particle_types-1):
         input_file += f"gaussian {i+1} {j+1} {Aij[i][j]}  {1.000}\n"
 
-with open('input', 'w') as fout:       
+with open('input2', 'w') as fout:       
     fout.writelines(input_file)
+
+
 
 file_name = os.getcwd()
 
 descr = f"""File: {file_name}
 Polymer density: {N * n_pol/box_vol}
+Midpush = {MIDPUSH}
+Polymer number {n_pol}
 Solvent: {n_sol}
 Counter ions: {n_ci}
 Number density: {(n_pol * N + n_sol + n_ci)/box_vol}
 Polymer volume fraction: {N * n_pol/(n_pol * N + n_sol + n_ci)}
 Polarity: {POLAR}
 Salt: {SALT}
-Small: {SMALL}
+Small: {FLAT}
 Chi_PS: {chi_ps}
 Chi_BS: {chi_bs}
 Chi_PI: {chi_pi}
 BOX: {lx} {ly} {lz}
 N_GRID {Nx} {Ny} {Nz}
+DIM: {DIM}
 
 """
 with open("../../info.txt", 'a+') as f:
     f.writelines(descr)
 print(descr)
 
+# group polya type 1
+# group polyb type 2
+# group polyc type 3
+# extraforce polya midpush 0.05
+# extraforce polyb midpush 0.05
+# extraforce polyc midpush 0.05
