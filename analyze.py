@@ -20,12 +20,15 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--chi', default = "chips")
+parser.add_argument('--dim', default = 3, type=int)
 args = parser.parse_args()
 
 if args.chi == "chips":
     chi_name = r"$\chi_{PS}$"
 elif args.chi == "chipi":
     chi_name = r"$\chi_{PI}$"
+
+dim = args.dim
 
 # colors = list(mcolors.CSS4_COLORS)[10::3]
 colors2 = ['orangered','teal', 'dodgerblue', 'gold', 'forestgreen', 'darkred', 'darkorchid', 'darkorange', 'cornflowerblue', 'darkgreen', 'crimson', 'peru', 'olivedrab']
