@@ -64,8 +64,8 @@ WATER = args.water
 WLC = args.wlc
 DIM = args.dim
 MIDPUSH = args.midpush
-
 SALT = args.salt
+
 chi_ps = args.chips
 chi_pi = args.chipi
 chi_bs = args.chibs
@@ -82,7 +82,7 @@ Ny = int(args.Ny * args.scale)
 Nz = int(args.Nz * args.scale)
 
 N_a = 25
-N_b = 0
+N_b = 25
 N_c = 25
 N = N_a + N_b + N_c
 seq = N_a * "A" + N_b * "B" + N_c * "C"
@@ -96,13 +96,19 @@ else:
 
 
 rho0 = 3.0
-phi = 0.045
+phi = 0.18 #0.045
 kappaN = 5 * 50
 kappa = kappaN/N
 
 n_pol = int(phi * box_vol * rho0/N)
 n_ci =  int(phi * box_vol * rho0 * (N_a + N_b)/N)
 n_sol = int(rho0 * box_vol - N * n_pol - n_ci)
+if SALT != 0.0:
+    n_salt = int(phi * box_vol * rho0 * SALT)
+    n_sol -= n_salt
+else:
+    n_salt = 0
+
 CHI = [
     [0,0,0,chi_ps,chi_pi,chi_pi,chi_pi],
     [0,0,0,chi_bs,chi_pi,chi_pi,chi_pi],
@@ -307,27 +313,24 @@ for i in range(n_ci//2):
     atom_count += 1
     mol_count += 1
 
-# if SALT == True:
-#     salt_charge = 0
-#     for _ in range(N_cat):
-#         props = [atom_count,mol_count,CAT[0], CAT[1]]
-#         for xyz in range(DIM):
-#             coord = np.random.uniform(0,1) * box_dim[xyz]
-#             props.append(coord)     
-#         properties.append(copy.deepcopy(props))
-#         atom_count += 1
-#         mol_count += 1
-#         salt_charge += CAT[1]
-#     for _ in range(N_anion):
-#         props = [atom_count,mol_count,ANI[0], ANI[1]]
-#         for xyz in range(DIM):
-#             coord = np.random.uniform(0,1) * box_dim[xyz]
-#             props.append(coord)     
-#         properties.append(copy.deepcopy(props))
-#         atom_count += 1
-#         mol_count += 1
-#         salt_charge +=  ANI[1]
-#     print(f"Total salt charge: {salt_charge}")
+if SALT != 0.0:
+    salt_charge = 0
+    for _ in range(int(n_salt//2)):
+        props = [atom_count,mol_count,CAT[0], CAT[1]]
+        for xyz in range(3):
+            coord = np.random.uniform(0,1) * box_dim[xyz]
+            props.append(coord)     
+        properties.append(copy.deepcopy(props))
+        atom_count += 1
+        mol_count += 1
+    for _ in range(int(n_salt//2)):
+        props = [atom_count,mol_count,ANI[0], ANI[1]]
+        for xyz in range(3):
+            coord = np.random.uniform(0,1) * box_dim[xyz]
+            props.append(coord)     
+        properties.append(copy.deepcopy(props))
+        atom_count += 1
+        mol_count += 1
 
 if WATER == True:
     for _ in range(n_sol):
@@ -366,7 +369,7 @@ with open("head.data", 'w') as fout:
     fout.writelines(f'{bond_types} bond types\n')
     fout.writelines(f'{angle_types} angle types\n')
     fout.writelines('\n')
-    fout.writelines(f'0.000 {box_dim[1]} xlo xhi\n')
+    fout.writelines(f'0.000 {box_dim[0]} xlo xhi\n')
     fout.writelines(f'0.000 {box_dim[1]} ylo yhi\n')
     fout.writelines(f'0.000 {box_dim[2]} zlo zhi\n')
     fout.writelines('\n')
@@ -463,9 +466,11 @@ bond 3 harmonic {2.5:7f} {0.0:7f}
 
 if MIDPUSH == True:
     input_file += f"""group polya type 1
+group polyb type 2
 group polyc type 3
-extraforce polya midpush 0.05
-extraforce polyc midpush 0.05
+extraforce polya midpush 0.1
+extraforce polyb midpush 0.1
+extraforce polyc midpush 0.1
 
 """
 
@@ -525,19 +530,26 @@ with open('input2', 'w') as fout:
 file_name = os.getcwd()
 
 descr = f"""File: {file_name}
+
 Polymer density: {N * n_pol/box_vol}
-Midpush = {MIDPUSH}
 Polymer number {n_pol}
 Solvent: {n_sol}
+Salt: {n_salt}
 Counter ions: {n_ci}
-Number density: {(n_pol * N + n_sol + n_ci)/box_vol}
-Polymer volume fraction: {N * n_pol/(n_pol * N + n_sol + n_ci)}
+
+
+Number density: {(n_pol * N + n_sol + n_ci + n_salt)/box_vol}
+Polymer volume fraction: {N * n_pol/(n_pol * N + n_sol + n_ci + n_salt)}
+
 Polarity: {POLAR}
-Salt: {SALT}
-Small: {FLAT}
+Salt ratio: {SALT}
+Flat: {FLAT}
+Midpush = {MIDPUSH}
+
 Chi_PS: {chi_ps}
 Chi_BS: {chi_bs}
 Chi_PI: {chi_pi}
+
 BOX: {lx} {ly} {lz}
 N_GRID {Nx} {Ny} {Nz}
 DIM: {DIM}
