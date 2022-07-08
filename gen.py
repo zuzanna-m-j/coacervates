@@ -32,6 +32,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--wlc', default = False, type = bool)
 parser.add_argument('--flat', default = False, type = bool)
+parser.add_argument('--small', default = False, type = bool)
 parser.add_argument('--water',default = True, type = bool)
 parser.add_argument('--polar',default = False, type = bool)
 parser.add_argument('--midpush',default = False, type = bool)
@@ -65,6 +66,7 @@ WLC = args.wlc
 DIM = args.dim
 MIDPUSH = args.midpush
 SALT = args.salt
+SMALL = args.small
 
 chi_ps = args.chips
 chi_pi = args.chipi
@@ -82,7 +84,7 @@ Ny = int(args.Ny * args.scale)
 Nz = int(args.Nz * args.scale)
 
 N_a = 25
-N_b = 25
+N_b = 0
 N_c = 25
 N = N_a + N_b + N_c
 seq = N_a * "A" + N_b * "B" + N_c * "C"
@@ -96,7 +98,7 @@ else:
 
 
 rho0 = 3.0
-phi = 0.18 #0.045
+phi = 0.40 #0.045
 kappaN = 5 * 50
 kappa = kappaN/N
 
@@ -217,11 +219,17 @@ for m_num in range(n_pol):
             
             props.append(atom_charge)
 
-
             if chain_pos == 0:
                 for xyz in range(3):
-                    coord = np.random.uniform(0,box_dim[xyz])
-                    props.append(coord)
+                    if SMALL == True:
+                        if xyz == 1:
+                            coord = np.random.uniform((2/5) * box_dim[xyz], (3/5) * box_dim[xyz])
+                        else:
+                            coord = np.random.uniform(0,box_dim[xyz])
+                        props.append(coord)
+                    else:
+                        coord = np.random.uniform(0,box_dim[xyz])
+                        props.append(coord)
                 if FLAT == True:
                     props[-1] = 0.0
             else:
@@ -229,9 +237,13 @@ for m_num in range(n_pol):
                 phi = random.uniform(- 2 * np.pi, 2 * np.pi)
                 x = 1.0 * np.cos(phi)*np.sin(theta) + properties[-1][4]
                 y = 1.0 * np.sin(phi)*np.sin(theta) + properties[-1][5]
+                if SMALL == True:
+                    while (2/5) * box_dim[1] > y > (3/5) * box_dim[1]:
+                        y = 1.0 * np.sin(phi)*np.sin(theta) + properties[-1][5]
                 z = 1.0 * np.cos(theta) + properties[-1][6]
                 if FLAT == True:
                     z = 0.0
+                
                 props.append(x)
                 props.append(y)
                 props.append(z)
@@ -268,18 +280,29 @@ for m_num in range(n_pol):
 
             if chain_pos == 0:
                 for xyz in range(3):
-                    coord = np.random.uniform(0,box_dim[xyz])
-                    props.append(coord)
+                    if SMALL == True:
+                        if xyz == 1:
+                            coord = np.random.uniform((2/5) * box_dim[xyz], (3/5) * box_dim[xyz])
+                        else:
+                            coord = np.random.uniform(0,box_dim[xyz])
+                        props.append(coord)
+                    else:
+                        coord = np.random.uniform(0,box_dim[xyz])
+                        props.append(coord)
                 if FLAT == True:
-                    props[-1] == 0.0
+                    props[-1] = 0.0
             else:
                 theta = random.uniform(-np.pi, np.pi)
                 phi = random.uniform(- 2 * np.pi, 2 * np.pi)
                 x = 1.0 * np.cos(phi)*np.sin(theta) + properties[-1][4]
                 y = 1.0 * np.sin(phi)*np.sin(theta) + properties[-1][5]
+                if SMALL == True:
+                    while (2/5) * box_dim[1] > y > (3/5) * box_dim[1]:
+                        y = 1.0 * np.sin(phi)*np.sin(theta) + properties[-1][5]
                 z = 1.0 * np.cos(theta) + properties[-1][6]
                 if FLAT == True:
                     z = 0.0
+                
                 props.append(x)
                 props.append(y)
                 props.append(z)
@@ -441,7 +464,7 @@ with open('tail.data', 'w') as fout:
 
 input_file = f"""Dim {DIM}
 
-max_steps 1000001
+max_steps 250001
 log_freq 1000
 binary_freq 10000
 traj_freq 500000
@@ -466,10 +489,8 @@ bond 3 harmonic {2.5:7f} {0.0:7f}
 
 if MIDPUSH == True:
     input_file += f"""group polya type 1
-group polyb type 2
 group polyc type 3
 extraforce polya midpush 0.1
-extraforce polyb midpush 0.1
 extraforce polyc midpush 0.1
 
 """
@@ -490,7 +511,7 @@ with open('input', 'w') as fout:
 
 input_file = f"""Dim {DIM}
 
-max_steps 1500001
+max_steps 1000001
 log_freq 1000
 binary_freq 10000
 traj_freq 500000
