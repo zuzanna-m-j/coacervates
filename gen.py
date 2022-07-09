@@ -33,7 +33,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--wlc', default = False, type = bool)
 parser.add_argument('--flat', default = False, type = bool)
 parser.add_argument('--small', default = False, type = bool)
-parser.add_argument('--water',default = True, type = bool)
 parser.add_argument('--polar',default = False, type = bool)
 parser.add_argument('--midpush',default = False, type = bool)
 
@@ -61,7 +60,6 @@ args = parser.parse_args()
 
 POLAR = args.polar
 FLAT = args.flat
-WATER = args.water
 WLC = args.wlc
 DIM = args.dim
 MIDPUSH = args.midpush
@@ -318,6 +316,13 @@ for m_num in range(n_pol):
     mol_angles.append(copy.deepcopy(mol_ang))
     mol_count += 1
 
+if POLAR == True:
+    pol_atms = int(n_pol * (2 * N_a + 2 * N_c + N_b))
+else:
+    pol_atms = int(n_pol * (N_a + N_b + N_c))
+
+sol_atms = int(n_ci//2 + n_ci//2 + n_salt//2 + n_salt//2 + 2 * n_sol)
+
 for i in range(n_ci//2):
     props = [atom_count,mol_count,CI[0], 1]
     for xyz in range(3):
@@ -355,22 +360,21 @@ if SALT != 0.0:
         atom_count += 1
         mol_count += 1
 
-if WATER == True:
-    for _ in range(n_sol):
-        props = [atom_count,mol_count,W[0], 1/2]
-        for xyz in range(3):
-            coord = np.random.uniform(0,1) * box_dim[xyz]
-            props.append(coord)     
-        properties.append(copy.deepcopy(props))
+for _ in range(n_sol):
+    props = [atom_count,mol_count,W[0], 1/2]
+    for xyz in range(3):
+        coord = np.random.uniform(0,1) * box_dim[xyz]
+        props.append(coord)     
+    properties.append(copy.deepcopy(props))
 
-        bonds.append([bond_count,3,atom_count,atom_count+1])
-        bond_count += 1
-        atom_count += 1
-        dx = properties[-1][4]
-        props = [atom_count,mol_count,D[0],-1/2,dx,dx,dx]
-        properties.append(copy.deepcopy(props))
-        atom_count += 1
-        mol_count += 1
+    bonds.append([bond_count,3,atom_count,atom_count+1])
+    bond_count += 1
+    atom_count += 1
+    dx = properties[-1][4]
+    props = [atom_count,mol_count,D[0],-1/2,dx,dx,dx]
+    properties.append(copy.deepcopy(props))
+    atom_count += 1
+    mol_count += 1
 
 if WLC == True:
     #process angles
@@ -407,46 +411,8 @@ with open('atoms.data','w') as fout:
     for line in properties:
         fout.writelines(f"{line[0]} {line[2]} {line[1]} {line[4]} {line[5]} {line[6]} {line[3]}\n")
 
-with open('tail.data', 'w') as fout:       
-    fout.writelines('\n')
-    fout.writelines('Bonds\n')
-    fout.writelines('\n')
-    for line in bonds:
-        fout.writelines(f"{line[0]} {line[1]}  {line[2]} {line[3]}\n")
-    if WLC == True:
-        fout.writelines('\n')
-        fout.writelines('Angles\n')
-        fout.writelines('\n')
-        for line in angles:
-            fout.writelines(f"{line[0]} {line[1]}  {line[2]} {line[3]} {line[4]}\n")
-
-
-with open("head2.data", 'w') as fout:
-    fout.writelines("Madatory string --> First rule of programing: if it works then don't touch it!\n\n")
-    fout.writelines(f'{atom_count - 1} atoms\n')
-    fout.writelines(f'{bond_count - 1} bonds\n')
-    if WLC == True:
-        fout.writelines(f'{angle_count - 1} angles\n')
-    else:
-        fout.writelines(f'{0} angles\n')
-    fout.writelines('\n')
-    fout.writelines(f'{particle_types} atom types\n')
-    fout.writelines(f'{bond_types} bond types\n')
-    fout.writelines(f'{angle_types} angle types\n')
-    fout.writelines('\n')
-    fout.writelines(f'0.000 {box_dim[0]} xlo xhi\n')
-    fout.writelines(f'0.000 {box_dim[1]} ylo yhi\n')
-    fout.writelines(f'0.000 {box_dim[2]} zlo zhi\n')
-    fout.writelines('\n')
-    fout.writelines('Masses\n')
-    fout.writelines('\n')
-    for i in range(len(types)):
-        fout.writelines(f'{i + 1} {1.000} \n')
-
-with open('atoms.data','w') as fout:
-    for i in range(9):
-        fout.writelines(f"{atom_count - 1}\n")
-    for line in properties:
+with open('sol.data','w') as fout:
+    for line in properties[pol_atms:]:
         fout.writelines(f"{line[0]} {line[2]} {line[1]} {line[4]} {line[5]} {line[6]} {line[3]}\n")
 
 with open('tail.data', 'w') as fout:       
@@ -462,12 +428,16 @@ with open('tail.data', 'w') as fout:
         for line in angles:
             fout.writelines(f"{line[0]} {line[1]}  {line[2]} {line[3]} {line[4]}\n")
 
+with open("info.data", 'w') as f: 
+    f.writelines(f"n_atoms: {atom_count - 1}\n")
+    f.writelines(f"pol_atoms: {pol_atms}")
+
 input_file = f"""Dim {DIM}
 
-max_steps 250001
+max_steps 50001
 log_freq 1000
-binary_freq 10000
-traj_freq 500000
+binary_freq 1000
+traj_freq 10000
 pmeorder 1
 
 charges {55:7f} {0.5}
@@ -509,42 +479,42 @@ with open('input', 'w') as fout:
 
 
 
-input_file = f"""Dim {DIM}
+# input_file = f"""Dim {DIM}
 
-max_steps 1000001
-log_freq 1000
-binary_freq 10000
-traj_freq 500000
-pmeorder 1
+# max_steps 1000001
+# log_freq 1000
+# binary_freq 10000
+# traj_freq 500000
+# pmeorder 1
 
-charges {55:7f} {0.5}
+# charges {55:7f} {0.5}
 
-delt {0.005:7f}
+# delt {0.005:7f}
 
-read_data input.data
-integrator all GJF
+# read_data input.data
+# integrator all GJF
 
-Nx {Nx}
-Ny {Ny}
-Nz {Nz}
+# Nx {Nx}
+# Ny {Ny}
+# Nz {Nz}
 
-bond 1 harmonic {1.0:7f} {0.0:7f}
-bond 2 harmonic {2.5:7f} {0.0:7f}
-bond 3 harmonic {2.5:7f} {0.0:7f}
+# bond 1 harmonic {1.0:7f} {0.0:7f}
+# bond 2 harmonic {2.5:7f} {0.0:7f}
+# bond 3 harmonic {2.5:7f} {0.0:7f}
 
-"""
+# """
 
-if WLC == True:
-    input_file += f"""angle 1 wlc {1.0:7f}
-    """
+# if WLC == True:
+#     input_file += f"""angle 1 wlc {1.0:7f}
+#     """
 
-input_file += f"\nn_gaussians {g_count}\n"
-for i in range(particle_types-1):
-    for j in range(i,particle_types-1):
-        input_file += f"gaussian {i+1} {j+1} {Aij[i][j]}  {1.000}\n"
+# input_file += f"\nn_gaussians {g_count}\n"
+# for i in range(particle_types-1):
+#     for j in range(i,particle_types-1):
+#         input_file += f"gaussian {i+1} {j+1} {Aij[i][j]}  {1.000}\n"
 
-with open('input2', 'w') as fout:       
-    fout.writelines(input_file)
+# with open('input2', 'w') as fout:       
+#     fout.writelines(input_file)
 
 
 
@@ -586,3 +556,9 @@ print(descr)
 # extraforce polya midpush 0.05
 # extraforce polyb midpush 0.05
 # extraforce polyc midpush 0.05
+
+# max_steps 
+# log_freq 5000
+# binary_freq 10000
+# traj_freq 500000
+# pmeorder 1
